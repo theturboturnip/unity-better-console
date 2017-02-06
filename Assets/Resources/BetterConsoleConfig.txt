@@ -1,0 +1,2 @@
+[Config]
+MaxLines=100
