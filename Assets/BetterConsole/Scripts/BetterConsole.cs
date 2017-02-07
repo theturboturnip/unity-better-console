@@ -6,11 +6,10 @@ using UnityEngine;
 
 public struct ConsoleArgument{
 	public Type argType;
-	public string argName,argExplanation; 
-	public ConsoleArgument(Type t,string n,string e){
+	public string argName; 
+	public ConsoleArgument(Type t,string n){
 		argType=t;
 		argName=n;
-		argExplanation=e;
 	}
 }
 
@@ -21,17 +20,22 @@ public class ConsoleCommand : IComparable{
 	public ConsoleArgument[] arguments;
 	public ConsoleCommandCallback callback;
 
-	public ConsoleCommand(string name, ConsoleCommandCallback c,params ConsoleArgument[] args){
+	public ConsoleCommand(string name, ConsoleCommandCallback c,string explanation,params ConsoleArgument[] args){
 		arguments=args;
 		commandName=name;
 		callback=c;
 		helpString=commandName+" ";
 		foreach(ConsoleArgument a in args){
-			helpString+=a.argName+" <"+a.argType+"> ("+a.argExplanation+")";
+			helpString+=a.argName+" <"+a.argType+"> ";
 		}
+		helpString+="\n\t"+explanation;
 	}
 
 	public bool ParseCommand(string[] givenArgs){
+		if (givenArgs.Length==1){
+			Debug.Log(helpString);
+			return true;
+		}
 		if (givenArgs.Length<arguments.Length+1){
 			Debug.LogError(commandName+" requires "+arguments.Length+" commands, given "+(givenArgs.Length-1)+".");
 			return false;
@@ -57,10 +61,10 @@ public class ConsoleCommand : IComparable{
 
 static class BetterConsoleDefaultCommands{
 	public static void RegisterCommands(){
-		ConsoleCommand translate=new ConsoleCommand("translate",TranslateCommand,new ConsoleArgument(typeof(Transform),"to_move","The thing to move"),new ConsoleArgument(typeof(float),"x","Delta X"),new ConsoleArgument(typeof(float),"y","Delta Y"),new ConsoleArgument(typeof(float),"z","Delta Z"));
-		BetterConsole.RegisterCommand(translate);
-		ConsoleCommand echo=new ConsoleCommand("echo",Echo,new ConsoleArgument(typeof(string),"to_echo","What to echo"));
-		BetterConsole.RegisterCommand(echo);
+		BetterConsole.RegisterCommand("translate",TranslateCommand,"Translates to_move by (x,y,z)",new ConsoleArgument(typeof(Transform),"to_move"),new ConsoleArgument(typeof(float),"x"),new ConsoleArgument(typeof(float),"y"),new ConsoleArgument(typeof(float),"z"));
+		//translate);
+		BetterConsole.RegisterCommand("echo",Echo,"Logs to_echo into the console",new ConsoleArgument(typeof(string),"to_echo"));
+		//BetterConsole.RegisterCommand(echo);
 	} 
 
 	public static bool Echo(object[] args){
@@ -132,13 +136,13 @@ public static class BetterConsole {
 		return true;
 	}
 
-	public static bool RegisterCommand(string commandName,ConsoleCommandCallback callback,params ConsoleArgument[] args){
+	public static bool RegisterCommand(string commandName,ConsoleCommandCallback callback,string explanation,params ConsoleArgument[] args){
 		if (!inited) LoadParams();
 		foreach(ConsoleCommand c in commands){
 			if (c.commandName==commandName)
 				return false;
 		}
-		ConsoleCommand toAdd=new ConsoleCommand(commandName,callback,args);
+		ConsoleCommand toAdd=new ConsoleCommand(commandName,callback,explanation,args);
 		commands.Add(toAdd);
 		commands.Sort();
 		Debug.Log("Successfully added command "+toAdd.commandName);
@@ -150,26 +154,42 @@ public static class BetterConsole {
 		string[] splitCommand=fullCommand.Trim().Split(' ');
 		foreach(ConsoleCommand c in commands){
 			if (c.commandName==splitCommand[0]){
-				if (splitCommand.Length==1){
-					Debug.Log(c.helpString);
-					return true;
-				}
 				return c.ParseCommand(splitCommand);
 			}
 		}
 		return false;
 	}
 
-	/*public static string AutoComplete(string fullCommand){
-		string[] splitCommand=fullCommand.Trim().Split(" ");
-		foreach(ConsoleCommand c in commands){
-			if (c.commandName==splitCommand[0]){
-				//Look for the last argument typed
+	public static string AutoComplete(string fullCommand,string previousAutocomplete){
+		if (!inited) LoadParams();
+		string[] splitCommand=fullCommand.Trim().Split(' ');
+		if (splitCommand.Length>1){
+			foreach(ConsoleCommand c in commands){
+				if (c.commandName==splitCommand[0]){
+					Type argType=c.arguments[c.arguments.Length-1].argType;
+					if (argType==typeof(Transform)){
+						//Autocomplete for a transform
+						return "";
+					}
+					//We can't autocomplete numerics, vectors or bools
+					break;
+				}
 			}
+			return ""; //Nothing to add
 		}
 		//Look for commands starting with splitCommand[0]
-
-	}*/
+		string commandName;
+		for(int cIndex=0;cIndex<commands.Count;cIndex++){
+			commandName=commands[cIndex].commandName;
+			//Debug.Log(commandName+","+commandName.Substring(splitCommand[0].Length)+","+splitCommand[0]);
+			if (commandName.Substring(0,splitCommand[0].Length)==splitCommand[0]){
+				//Up for consideration
+				if (commandName.CompareTo(splitCommand[0]+previousAutocomplete)>0 || previousAutocomplete=="")
+					return commandName.Substring(splitCommand[0].Length);
+			}
+		}
+		return "";
+	}
 
 	/*				
 		LOGGING  
