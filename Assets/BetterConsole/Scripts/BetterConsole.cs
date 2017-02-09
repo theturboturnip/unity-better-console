@@ -119,8 +119,6 @@ public static class BetterConsole {
 	static bool inited=false,allowCollapse;
 
 	public static void LoadParams(){
-		TypeDescriptor.AddAttributes(typeof(Transform), new TypeConverterAttribute(
-            typeof(TransformConverter)));
 		logQueue=new List<BetterConsole.Line>();
 		Dictionary<string,Dictionary<string,string>> parsedINI=IniParse.ParseINI((Resources.Load("BetterConsoleConfig") as TextAsset).text);
 		maxLines=int.Parse(parsedINI["Config"]["MaxLines"]);
