@@ -13,7 +13,10 @@ public static class ConvertUtil {
 	}
 
 	public static Transform StringToTransform(string s){
-		return GameObject.Find(s).transform;
+		GameObject foundObj=GameObject.Find(s);
+		if (foundObj==null)
+			return null;
+		return foundObj.transform;
 	}
 
 	public static string Vector2ToString(Vector2 vec2){

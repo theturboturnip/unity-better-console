@@ -24,10 +24,14 @@ public class ConsoleGUI : MonoBehaviour {
 
 		Event e=Event.current;
 		int inputType=0;
+		char inputChar=e.character;
+		//KeyCode inputKey=KeyCode.None;
 		if (e.isKey&&e.type==EventType.KeyDown){
 			if (e.keyCode==(KeyCode.Tab)) inputType=1;
 			else if (e.keyCode==(KeyCode.Return)) inputType=2;
-			else inputType=3;
+			else if (e.keyCode==KeyCode.Backspace) inputType=3;
+			else inputType=4;//if (e.keyCode!=KeyCode.None) inputType=3;
+			//inputKey=e.keyCode;
 		}
 
 		GUI.SetNextControlName("console_input");
@@ -41,20 +45,23 @@ public class ConsoleGUI : MonoBehaviour {
 			txt.cursorIndex = currentCommand.Length+autoComplete.Length;
 			txt.selectIndex=txt.cursorIndex;
 		}else if (inputType==2){
-			if (autoComplete!=""){
+			/*if (autoComplete!=""){
 				currentCommand+=autoComplete;
 				autoComplete="";
-			}else{
+			}else{*/
+				currentCommand+=autoComplete;
 				BetterConsole.ParseCommand(currentCommand);
 				currentCommand="";
 				autoComplete="";
-			}
+			//}
 			GUI.FocusControl("console_input");
-
-		}else if (GUI.GetNameOfFocusedControl()=="console_input"&&inputType==3){
+		}else if (inputType==3){
+			if (autoComplete!="") autoComplete="";
+			else currentCommand=nuCommand;
+		}else if (GUI.GetNameOfFocusedControl()=="console_input"&&inputType==4){
 			if (autoComplete==""){
 				currentCommand=nuCommand;
-			}else{
+			}else if (e.keyCode!=KeyCode.None){
 				currentCommand+=autoComplete;
 				autoComplete="";
 			}

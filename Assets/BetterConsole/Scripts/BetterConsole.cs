@@ -77,8 +77,14 @@ static class BetterConsoleDefaultCommands{
 		BetterConsole.RegisterCommand("translate",TranslateCommand,"Translates to_move by move_delta",new ConsoleArgument(typeof(Transform),"to_move"),new ConsoleArgument(typeof(Vector3),"move_delta"));
 		//translate);
 		BetterConsole.RegisterCommand("echo",Echo,"Logs to_echo into the console",new ConsoleArgument(typeof(string),"to_echo"));
+		BetterConsole.RegisterCommand("egg",Egg,"Eggs to_egg",new ConsoleArgument(typeof(GameObject),"to_egg"));
 		//BetterConsole.RegisterCommand(echo);
 	} 
+
+	public static bool Egg(object[] args){
+		Debug.Log(((GameObject)args[0]).name+" WAS EGGED");
+		return true;
+	}
 
 	public static bool Echo(object[] args){
 		Debug.Log((string)args[0]);
@@ -185,6 +191,7 @@ public static class BetterConsole {
 		if (!inited) LoadParams();
 		Debug.Log(":"+fullCommand);
 		string[] splitCommand=SplitCommand(fullCommand);
+		if (splitCommand.Length==0) return false;
 		foreach(ConsoleCommand c in commands){
 			if (c.commandName==splitCommand[0]){
 				return c.ParseCommand(splitCommand);
@@ -196,37 +203,87 @@ public static class BetterConsole {
 
 	public static string AutoComplete(string fullCommand,string previousAutocomplete){
 		if (!inited) LoadParams();
-		string[] splitCommand=SplitCommand(fullCommand);//fullCommand.Trim().Split(' ');
-		if (splitCommand.Length>1){
+		string[] splitCommand=SplitCommand(fullCommand,false);//fullCommand.Trim().Split(' ');
+		//if (splitCommand.Length==0) return "";
+		string finalArg=(splitCommand.Length>=1)?splitCommand[splitCommand.Length-1]:"";
+		if (splitCommand.Length>1) splitCommand[0]=splitCommand[0].Trim(); //This is for command recognition ("echo "!="echo")
+		List<string> autoCompleteChoices=new List<string>();
+		//if (splitCommand.Length>1){
 			foreach(ConsoleCommand c in commands){
-				if (c.commandName==splitCommand[0]){
-					Type argType=c.arguments[c.arguments.Length-1].argType;
-					if (argType==typeof(Transform)){
+				if (splitCommand.Length<=1){
+					//Debug.Log("Autocompleting Command");
+					autoCompleteChoices.Add(c.commandName);
+					continue;
+				}
+				if (c.commandName==splitCommand[0] && splitCommand.Length<=c.arguments.Length+1){
+					Type argType=c.arguments[splitCommand.Length-2].argType;
+					if (argType==typeof(Transform) || argType==typeof(GameObject)){
 						//Autocomplete for a transform
-						return "";
+						//return "";
+						Transform t = ConvertUtil.StringToTransform(finalArg);
+						string parentName=finalArg;
+						//Debug.Log(t);
+						if (t==null){
+							parentName=FindParentTransformNameFromString(finalArg);
+							t=ConvertUtil.StringToTransform(parentName);
+							//Debug.Log(t+" found from string "+finalArg);
+						}
+						if (t==null){
+							//Search through top level
+							GameObject[] roots=UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects();
+							foreach(GameObject root in roots){
+								autoCompleteChoices.Add(root.name);
+							}
+							//return "";
+						}else{
+							//Search through children
+							if (parentName[parentName.Length-1]!='/')
+								parentName+='/';
+							foreach(Transform child in t){
+								autoCompleteChoices.Add(parentName+child.gameObject.name);
+								//Debug.Log(parentName+child.gameObject.name);
+							}
+						}
 					}
 					//We can't autocomplete numerics, vectors or bools
 					break;
 				}
 			}
-			return ""; //Nothing to add
-		}
+			//return ""; //Nothing to add
+		//}else{
+		//}
 		//Look for commands starting with splitCommand[0]
-		string commandName;
-		for(int cIndex=0;cIndex<commands.Count;cIndex++){
-			commandName=commands[cIndex].commandName;
+		string name;
+		for(int i=0;i<autoCompleteChoices.Count;i++){
+			name=autoCompleteChoices[i];
+			if (finalArg.Length<=name.Length && name.Substring(0,finalArg.Length)==finalArg){
+				//Up for consideration
+				if (name==finalArg+previousAutocomplete) continue;
+				//Debug.Log(name+" up for consideration");
+				if ((i==0 && finalArg+previousAutocomplete==autoCompleteChoices[autoCompleteChoices.Count-1]) || (i>0 && finalArg+previousAutocomplete==autoCompleteChoices[i-1]) || previousAutocomplete=="")
+					return name.Substring(finalArg.Length);
+			}
+		}
+		/*for(int cIndex=0;cIndex<commands.Count;cIndex++){
+			name=commands[cIndex].commandName;
 			//Debug.Log(commandName+","+commandName.Substring(splitCommand[0].Length)+","+splitCommand[0]);
-			if (commandName.Substring(0,Mathf.Min(splitCommand[0].Length,commandName.Length))==splitCommand[0]){
+			if (splitCommand[0].Length<commandName.Length && commandName.Substring(0,splitCommand[0].Length)==splitCommand[0]){
 				//Up for consideration
 				if (commandName.CompareTo(splitCommand[0]+previousAutocomplete)>0 || previousAutocomplete=="")
 					return commandName.Substring(splitCommand[0].Length);
 			}
-		}
+		}*/
 		return "";
 	}
 
-	static string[] SplitCommand(string fullCommand){
-		fullCommand=fullCommand.Trim();
+	static string FindParentTransformNameFromString(string s){
+		for(int i=s.Length-1;i>=0;i--)
+			if (s[i]=='/') return s.Substring(0,i+1);
+		return s;
+	}
+
+	static string[] SplitCommand(string fullCommand,bool trimSpaces=true){
+		//fullCommand=fullCommand.Trim();
 		List<string> splitCommand=new List<string>();
 		bool enclosed=false;
 		int start=0;
@@ -234,7 +291,7 @@ public static class BetterConsole {
 			if (fullCommand[i]==' '&&!enclosed || (enclosed&&(fullCommand[i]==')' || fullCommand[i]=='\"'))){
 				//if (i==fullCommand.Length-1 || fullCommand[i+1]!='\"')
 				if (!enclosed){
-					splitCommand.Add(fullCommand.Substring(start,i-start));
+					splitCommand.Add(fullCommand.Substring(start,i-start+1));
 					start=i+1;
 				}else if (fullCommand[start]=='\"'){
 					splitCommand.Add(fullCommand.Substring(start+1,i-start-1));
@@ -252,6 +309,11 @@ public static class BetterConsole {
 			if (fullCommand[start]=='\"') splitCommand.Add(fullCommand.Substring(start+1,fullCommand.Length-1-start));
 			else if (start+1<fullCommand.Length && fullCommand[start+1]=='(') splitCommand.Add(fullCommand.Substring(start-1,fullCommand.Length-start));
 			else splitCommand.Add(fullCommand.Substring(start,fullCommand.Length-start));
+		}
+
+		if (trimSpaces){
+			for(int i=0;i<splitCommand.Count;i++)
+				splitCommand[i]=splitCommand[i].Trim();
 		}
 		return splitCommand.ToArray();
 	}
