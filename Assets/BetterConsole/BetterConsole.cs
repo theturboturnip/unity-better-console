@@ -12,22 +12,38 @@ namespace TurboTurnip.BetterConsole{
 public struct ConsoleArgument{
 	public Type argType;
 	public string argName; 
-	public ConsoleArgument(Type t,string n){
+	public bool optional,isParams;
+
+	public ConsoleArgument(Type t,string n,bool o=false,bool p=false){
 		argType=t;
 		argName=n;
+		optional=o;
+		isParams=p;
 	}
 }
 
 //This is the type of function that can be called by the console
-public delegate bool ConsoleCommandCallback(object[] arguments);
+public delegate bool ConsoleCommandCallback(List<object> arguments);
 
 public class ConsoleCommand : IComparable{
 	public string commandName,helpString;
 	public ConsoleArgument[] arguments;
 	public ConsoleCommandCallback callback;
+	int minRequiredArgs,maxArgs;
 
 	public ConsoleCommand(string name, ConsoleCommandCallback c,string explanation,params ConsoleArgument[] args){
 		arguments=args;
+
+		minRequiredArgs=0;
+		for(int i=0;i<args.Length;i++){
+			if (args[i].optional)
+				break;
+			minRequiredArgs++;
+		}
+
+		maxArgs=args.Length;
+		if (args[args.Length-1].isParams)
+			maxArgs=-1;
 		commandName=name;
 		callback=c;
 		helpString=commandName+" ";
@@ -45,16 +61,28 @@ public class ConsoleCommand : IComparable{
 		}
 
 		//If we haven't given the correct amount of arguments, let the user know 
-		if (givenArgs.Length!=arguments.Length+1){
-			Debug.LogError(commandName+" requires "+arguments.Length+" commands, given "+(givenArgs.Length-1)+".");
+		if (givenArgs.Length<minRequiredArgs+1){
+			Debug.LogError(commandName+" requires at least "+minRequiredArgs+" commands, given "+(givenArgs.Length-1)+".");
 			return false;
+		}else if (givenArgs.Length>maxArgs+1 && maxArgs>=0){
+			Debug.LogError(commandName+" was given too many arguments, maximum "+maxArgs);
 		}
 
-		object[] toSend=new object[arguments.Length]; //This is the array we pass to the command function
-		for (int i=0;i<arguments.Length;i++)
+		List<object> toSend=new List<object>();
+		//object[] toSend=new object[arguments.Length]; //This is the array we pass to the command function
+		//for (int i=0;i<arguments.Length;i++)
 			//This converts the argument to the supported type, and places it in the array.
-			toSend[i]=ConvertUtil.ConvertString(givenArgs[i+1],arguments[i].argType);
-		
+		//	toSend[i]=ConvertUtil.ConvertString(givenArgs[i+1],arguments[i].argType);
+		//bool paramMode=false;
+		Type type=arguments[0].argType;
+		for(int i=1;i<givenArgs.Length;i++){
+			if (i-1<arguments.Length)//{
+				type=arguments[i-1].argType;
+				//paramMode=
+			//}
+			toSend.Add(ConvertUtil.ConvertString(givenArgs[i],type));
+		}
+
 		return callback(toSend);
 	}
 
@@ -69,19 +97,20 @@ public class ConsoleCommand : IComparable{
 static class BetterConsoleDefaultCommands{
 	public static void RegisterCommands(){
 		BetterConsole.RegisterCommand("translate",TranslateCommand,"Translates to_move by move_delta",new ConsoleArgument(typeof(Transform),"to_move"),new ConsoleArgument(typeof(Vector3),"move_delta"));
-		BetterConsole.RegisterCommand("echo",Echo,"Logs to_echo into the console",new ConsoleArgument(typeof(string),"to_echo"));
-		BetterConsole.RegisterCommand("egg",Egg,"Eggs to_egg",new ConsoleArgument(typeof(GameObject),"to_egg"));
-		BetterConsole.RegisterCommand("get_var",GetVar,"Prints the value of the variable named var_name in the Component of type comp_type attached to GameObject get_from",new ConsoleArgument(typeof(GameObject),"get_from"),new ConsoleArgument(typeof(string),"comp_type"),new ConsoleArgument(typeof(string),"var_name"));
-		BetterConsole.RegisterCommand("set_var",SetVar,"Sets get_from's Component of type comp_type's variable named var_name to value var_val ",new ConsoleArgument(typeof(GameObject),"get_from"),new ConsoleArgument(typeof(string),"comp_type"),new ConsoleArgument(typeof(string),"var_name"),new ConsoleArgument(typeof(string),"var_val"));
+		BetterConsole.RegisterCommand("echo",Echo,"Logs to_echo into the console",new ConsoleArgument(typeof(string),"to_echo",false,true));
+		BetterConsole.RegisterCommand("egg",Egg,"Eggs to_egg, optionally to_egg will be egged by egger",new ConsoleArgument(typeof(GameObject),"to_egg",false),new ConsoleArgument(typeof(GameObject),"egger",true));
+		BetterConsole.RegisterCommand("get_var",GetVar,"Prints the value of the variable named var_name in the Component of type comp_type attached to GameObject get_obj",new ConsoleArgument(typeof(GameObject),"get_obj"),new ConsoleArgument(typeof(string),"comp_type"),new ConsoleArgument(typeof(string),"var_name"));
+		BetterConsole.RegisterCommand("set_var",SetVar,"Sets set_obj's Component of type comp_type's variable named var_name to value var_val ",new ConsoleArgument(typeof(GameObject),"set_obj"),new ConsoleArgument(typeof(string),"comp_type"),new ConsoleArgument(typeof(string),"var_name"),new ConsoleArgument(typeof(string),"var_val"));
+		BetterConsole.RegisterCommand("call_func",CallMethod,"Calls the function to_call on the Component of type comp_type attached to GameObject call_obj",new ConsoleArgument(typeof(GameObject),"call_obj"),new ConsoleArgument(typeof(string),"comp_type"),new ConsoleArgument(typeof(string),"to_call"),new ConsoleArgument(typeof(string),"args",true,true));
 	} 
 
-	static bool GetVar(object[] args){
+	static bool GetVar(List<object> args){
 		GameObject getFromObject=(GameObject)args[0];
 		string toGet=(string)args[2];
 		UnityEngine.Component getFromComponent=getFromObject.GetComponent((string)args[1]);
-		Type componentType=getFromComponent.GetType();//Type.GetType((string)args[1]);
+		Type componentType=getFromComponent.GetType();
 
-		FieldInfo varInfo = componentType.GetField( toGet );
+		FieldInfo varInfo = componentType.GetField(toGet);
 		if (varInfo==null){
 			PropertyInfo propInfo=componentType.GetProperty(toGet);
 			if (propInfo==null){
@@ -95,13 +124,13 @@ static class BetterConsoleDefaultCommands{
 		return true;
 	}
 
-	static bool SetVar(object[] args){
+	static bool SetVar(List<object> args){
 		GameObject setToObject=(GameObject)args[0];
 		string toGet=(string)args[2];
 		UnityEngine.Component setToComponent=setToObject.GetComponent((string)args[1]);
 		Type componentType=setToComponent.GetType();
 
-		FieldInfo varInfo = componentType.GetField( toGet);//,BindingFlags.Instance|BindingFlags.Public);
+		FieldInfo varInfo = componentType.GetField(toGet);
 		if (varInfo==null){
 			PropertyInfo propInfo=componentType.GetProperty(toGet);
 			if (propInfo==null){
@@ -112,22 +141,53 @@ static class BetterConsoleDefaultCommands{
 			return true;
 		}
 		varInfo.SetValue(setToComponent,ConvertUtil.ConvertString((string)args[3],varInfo.FieldType));
-
-		//Debug.Log(setToComponent+"."+toGet+" = "+varInfo.GetValue(setToComponent));
 		return true;
 	}
 
-	public static bool Egg(object[] args){
-		Debug.Log(((GameObject)args[0]).name+" WAS EGGED");
+	static bool CallMethod(List<object> args){
+		GameObject callObject=(GameObject)args[0];
+		string toGet=(string)args[2];
+		UnityEngine.Component callComponent=callObject.GetComponent((string)args[1]);
+		Type componentType=callComponent.GetType();
+
+		MethodInfo methodInfo=componentType.GetMethod(toGet, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+		if (methodInfo==null){
+			Debug.LogError("Couldn't find a function named "+toGet+" in "+args[1]);
+			return false;
+		}
+
+		ParameterInfo[] paramInfo=methodInfo.GetParameters();
+		if (args.Count==3 && paramInfo.Length>0){
+			string toPrint=componentType+"."+toGet+"(";
+			for(int i=0;i<paramInfo.Length-1;i++)
+				toPrint+=paramInfo[i].ParameterType+" "+paramInfo[i].Name+",";
+			if (paramInfo.Length>0) toPrint+=paramInfo[paramInfo.Length-1].ParameterType+" "+paramInfo[paramInfo.Length-1].Name+")";
+			//else toPrint+="void)";
+			Debug.Log(toPrint);
+			return true;
+		}
+
+		object[] parameters=(paramInfo.Length>0)?new object[args.Count-3]:null;
+		if (paramInfo.Length>0) args.CopyTo(3,parameters,0,parameters.Length);
+		methodInfo.Invoke(callComponent,parameters);
 		return true;
 	}
 
-	public static bool Echo(object[] args){
-		Debug.Log((string)args[0]);
+	public static bool Egg(List<object> args){
+		if (args.Count==1)
+			Debug.Log(((GameObject)args[0]).name+" WAS EGGED");
+		else 
+			Debug.Log(((GameObject)args[0]).name+" WAS EGGED BY "+((GameObject)args[1]).name);
 		return true;
 	}
 
-	public static bool TranslateCommand(object[] args){
+	public static bool Echo(List<object> args){
+		foreach (object a in args)
+			Debug.Log((string)a);
+		return true;
+	}
+
+	public static bool TranslateCommand(List<object> args){
 		Transform toMove=args[0] as Transform;
 		Vector3 delta=(Vector3)args[1];
 		toMove.position+=delta;
@@ -157,7 +217,7 @@ public static class BetterConsole {
 
 	static List<Line> logQueue;
 	static List<ConsoleCommand> commands;
-	static int maxLines;
+	public static int maxLines,maxRememberedCommands;
 	static bool inited=false,allowCollapse;
 
 	//This inits the console
@@ -165,6 +225,7 @@ public static class BetterConsole {
 		logQueue=new List<BetterConsole.Line>();
 		Dictionary<string,Dictionary<string,string>> parsedINI=IniParse.ParseINI((Resources.Load("BetterConsoleConfig") as TextAsset).text);
 		maxLines=int.Parse(parsedINI["Config"]["MaxLines"]);
+		maxRememberedCommands=int.Parse(parsedINI["Config"]["MaxRememberedCommands"]);
 		commands=new List<ConsoleCommand>();
 		Application.logMessageReceived+=HandleUnityLog;
 		inited=true;
@@ -286,7 +347,6 @@ public static class BetterConsole {
 						GameObject[] roots=UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects();
 						foreach(GameObject root in roots){
 							autoCompleteChoices.Add(root.name);
-							Debug.Log(root.name);
 						}
 					}else{
 						//Search through children

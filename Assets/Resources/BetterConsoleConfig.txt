@@ -1,2 +1,3 @@
 [Config]
 MaxLines=100
+MaxRememberedCommands=100
