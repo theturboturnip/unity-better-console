@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+namespace TurboTurnip.Utility{
+
 public static class IniParse {
 	public static Dictionary<string,Dictionary<string,string>> ParseINI(string rawText){
 		Dictionary<string,Dictionary<string,string>> data=new Dictionary<string,Dictionary<string,string>>();
@@ -22,4 +24,6 @@ public static class IniParse {
 		}
 		return data;
 	}
+}
+
 }

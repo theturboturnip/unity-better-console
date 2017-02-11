@@ -1,6 +1,10 @@
 ﻿using System.Collections;
+using System;
+using System.ComponentModel;
 using System.Collections.Generic;
 using UnityEngine;
+
+namespace TurboTurnip.Utility{
 
 public static class ConvertUtil {
 	public static string TransformToString(Transform t){
@@ -57,4 +61,27 @@ public static class ConvertUtil {
 		toReturn.w=float.Parse(splitComponents[3]);
 		return toReturn;
 	}
+
+	public static object ConvertString(string s,Type t){
+		if (t==typeof(string)){
+			return s; //If we want a string don't bother with conversion.
+		}else if (t==typeof(Transform)){							
+			return ConvertUtil.StringToTransform(s);				
+		}else if (t==typeof(GameObject)){
+			return ConvertUtil.StringToTransform(s).gameObject;		
+		}else if (t==typeof(Vector2)){							
+			return ConvertUtil.StringToVector2(s);					
+		}else if (t==typeof(Vector3)){							
+			return ConvertUtil.StringToVector3(s);					
+		}else if (t==typeof(Vector4)){							
+			return ConvertUtil.StringToVector4(s);					
+		}else if (t==typeof(Quaternion)){						
+			//Special case, Quaternions are represented with an euler Vector3 in the console so we should convert.
+			return Quaternion.Euler(ConvertUtil.StringToVector3(s));					
+		}
+		//It's a generic type (we hope), so TypeConverter can handle it.
+		return TypeDescriptor.GetConverter(t).ConvertFrom(s);
+	}
+}
+
 }
