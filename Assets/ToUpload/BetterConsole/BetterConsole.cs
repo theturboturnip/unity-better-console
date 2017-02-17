@@ -48,14 +48,14 @@ public class ConsoleCommand : IComparable{
 		callback=c;
 		helpString=commandName+" ";
 		foreach(ConsoleArgument a in args){
-			helpString+=a.argName+" <"+a.argType+"> ";
+			helpString+="["+a.argName+" <"+(a.optional?"optional ":"")+(a.isParams?"params ":"")+a.argType+">]";
 		}
 		helpString+="\n\t"+explanation;
 	}
 
 	//Take an array of the command name + arguments and call the command function with the arguments converted to required forms.
 	public bool ParseCommand(string[] givenArgs){
-		if (givenArgs.Length==1 && arguments.Length!=0){ //If we haven't added arguments and the command requires arguments, tell the user what to give to this command.
+		if (givenArgs.Length==1 && minRequiredArgs!=0){ //If we haven't added arguments and the command requires arguments, tell the user what to give to this command.
 			Debug.Log(helpString);
 			return true;
 		}
@@ -69,17 +69,11 @@ public class ConsoleCommand : IComparable{
 		}
 
 		List<object> toSend=new List<object>();
-		//object[] toSend=new object[arguments.Length]; //This is the array we pass to the command function
-		//for (int i=0;i<arguments.Length;i++)
-			//This converts the argument to the supported type, and places it in the array.
-		//	toSend[i]=ConvertUtil.ConvertString(givenArgs[i+1],arguments[i].argType);
-		//bool paramMode=false;
+
 		Type type=arguments[0].argType;
 		for(int i=1;i<givenArgs.Length;i++){
-			if (i-1<arguments.Length)//{
+			if (i-1<arguments.Length)
 				type=arguments[i-1].argType;
-				//paramMode=
-			//}
 			toSend.Add(ConvertUtil.ConvertString(givenArgs[i],type));
 		}
 
@@ -102,7 +96,38 @@ static class BetterConsoleDefaultCommands{
 		BetterConsole.RegisterCommand("get_var",GetVar,"Prints the value of the variable named var_name in the Component of type comp_type attached to GameObject get_obj",new ConsoleArgument(typeof(GameObject),"get_obj"),new ConsoleArgument(typeof(string),"comp_type"),new ConsoleArgument(typeof(string),"var_name"));
 		BetterConsole.RegisterCommand("set_var",SetVar,"Sets set_obj's Component of type comp_type's variable named var_name to value var_val ",new ConsoleArgument(typeof(GameObject),"set_obj"),new ConsoleArgument(typeof(string),"comp_type"),new ConsoleArgument(typeof(string),"var_name"),new ConsoleArgument(typeof(string),"var_val"));
 		BetterConsole.RegisterCommand("call_func",CallMethod,"Calls the function to_call on the Component of type comp_type attached to GameObject call_obj",new ConsoleArgument(typeof(GameObject),"call_obj"),new ConsoleArgument(typeof(string),"comp_type"),new ConsoleArgument(typeof(string),"to_call"),new ConsoleArgument(typeof(string),"args",true,true));
+		BetterConsole.RegisterCommand("tree",Tree,"Lists either all objects in the heirarchy or all children of root_obj",new ConsoleArgument(typeof(Transform),"root_obj",true));
+		BetterConsole.RegisterCommand("help",Help,"Describes the command named cmd_name",new ConsoleArgument(typeof(string),"cmd_name"));
+	}
+
+	static bool Help(List<object> args){
+		ConsoleCommand cmd=BetterConsole.FindCommand((string)args[0]);
+		if (cmd==null){
+			Debug.LogError("Command \""+args[0]+"\" doesn't exist");
+			return false;
+		}
+		Debug.Log(cmd.helpString);
+		return true;
+	}
+
+	static bool Tree(List<object> args){
+		GameObject[] roots;
+		if (args.Count>0){
+			roots=new GameObject[((Transform)args[0]).childCount];
+			for (int i=0;i<roots.Length;i++)
+				roots[i]=((Transform)args[0]).GetChild(i).gameObject;
+		}else roots=UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects();
+		foreach(GameObject root in roots)
+			PrintChildren(root.transform);
+		return true;
 	} 
+
+	static void PrintChildren(Transform rootT){
+		Debug.Log(ConvertUtil.TransformToString(rootT));
+		foreach(Transform child in rootT){
+			PrintChildren(child);
+		}
+	}	
 
 	static bool GetVar(List<object> args){
 		GameObject getFromObject=(GameObject)args[0];
@@ -395,6 +420,15 @@ public static class BetterConsole {
 		return toReturn;
 	}
 
+	public static ConsoleCommand FindCommand(string name){
+		//Look for commands to run
+		foreach(ConsoleCommand c in commands){
+			if (c.commandName==name)
+				return c;
+		}
+		return null;
+	}
+
 	//This removes everything in the string after the final / (i.e. "Cube/Sp" -> "Cube/")
 	static string FindParentTransformNameFromString(string s){
 		for(int i=s.Length-1;i>=0;i--)
@@ -407,10 +441,10 @@ public static class BetterConsole {
 		List<string> splitCommand=new List<string>();
 		bool enclosed=false; //This represents whether the current character is enclosed in () or ""
 		int start=0; //This represents the index where the enclosure began
-
+		char encloser=' ';
 		for(int i=0;i<fullCommand.Length;i++){
 			//If this char is an unenclosed space or if it finished enclosure, we've found a command/argument
-			if ((fullCommand[i]==' '&& !enclosed) || (enclosed&&(fullCommand[i]==')' || fullCommand[i]=='\"'))){
+			if ((fullCommand[i]==' '&& !enclosed) || (enclosed&&((fullCommand[i]==')'&&encloser=='(')	 || fullCommand[i]==encloser))){
 				if (!enclosed){
 					splitCommand.Add(fullCommand.Substring(start,i-start+1));
 					start=i+1;
@@ -422,8 +456,10 @@ public static class BetterConsole {
 					start=i+2;
 				}
 				enclosed=false;
-			}else if (fullCommand[i]=='(' || fullCommand[i]=='\"') //Otherwise, if this char starts enclosure we should set the enclosure flag
+			}else if (!enclosed&&(fullCommand[i]=='(' || fullCommand[i]=='\"')){ //Otherwise, if this char starts enclosure we should set the enclosure flag
 				enclosed=true;
+				encloser=fullCommand[i];
+			}
 		}
 
 		if (start<fullCommand.Length) { //If we haven't added the final argument/command, do so

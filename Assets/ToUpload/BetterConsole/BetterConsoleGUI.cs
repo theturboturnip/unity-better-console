@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using TurboTurnip.BetterConsole;
 
-public class ConsoleGUI : MonoBehaviour {
+public class BetterConsoleGUI : MonoBehaviour {
 	public bool showConsole=true;
 	public KeyCode consoleKey=KeyCode.LeftBracket;
 	string nuCommand="",currentCommand="",autoComplete="";
@@ -30,18 +30,25 @@ public class ConsoleGUI : MonoBehaviour {
 
 		Application.logMessageReceived+=OnLog;
 		commandMemory=new List<string>();
-		//Debug.Log(typeof(ConsoleGUI).GetMember("activeConsole"));
+
+		GameObject[] roots=UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects();
+		foreach (GameObject root in roots){
+			root.BroadcastMessage("RegisterCommands",SendMessageOptions.DontRequireReceiver);
+		}
 	}
 
 	public void Update(){
-		if (Input.GetKeyDown(consoleKey))
+		if (ShouldToggle())
 			showConsole=!showConsole;
+	}
+
+	public virtual bool ShouldToggle(){
+		return Input.GetKeyDown(consoleKey);
 	}
 
 
 	void OnGUI(){
 		if (!showConsole) return;
-		//inputStyle.normal.background = GUI.skin.textField.normal.background; //We can't access GUI.skin outside of GUI functions, so do it here
 		GUI.Window(0,defaultWindowPos,DrawWindow,"Better Console");
 	}
 
@@ -121,3 +128,4 @@ public class ConsoleGUI : MonoBehaviour {
 		scrollPos.y+=10000000000000; //Make sure we scroll to the bottom
 	}
 }
+

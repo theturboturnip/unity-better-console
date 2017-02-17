@@ -12,11 +12,14 @@ public static class ConvertUtil {
 		t=t.parent;
 		while(t!=null){
 			name=t.gameObject.name+"/"+name;
+			t=t.parent;
 		}
 		return name;
 	}
 
 	public static Transform StringToTransform(string s){
+		if (s[0]!='/')
+			s="/"+s;
 		GameObject foundObj=GameObject.Find(s);
 		if (foundObj==null)
 			return null;
